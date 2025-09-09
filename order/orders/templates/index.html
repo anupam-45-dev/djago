@@ -1,0 +1,914 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Simple Food Ordering (Frontend Only)</title>
+  
+ 
+
+
+  <style>
+    :root{--accent:#ff6b35;--muted:#666}
+    *{box-sizing:border-box}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial;margin:0;color:#222}
+
+    /* ===== NAVBAR (updated) ===== */
+    header{
+      position:sticky;top:0;z-index:20;
+      background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.06);
+      padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    }
+    .brand{display:flex;align-items:center;gap:8px}
+    header h1{font-size:18px;margin:0;line-height:1.2}
+    .nav-actions{display:flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap}
+    .nav-toggle{
+      display:none; margin-left:auto; padding:8px 10px; border:1px solid #eee;
+      background:#fff;border-radius:8px;cursor:pointer;font-size:18px;line-height:1
+    }
+    header .badge{
+      background:var(--accent);color:#fff;padding:6px 10px;border-radius:20px;font-weight:600
+    }
+
+    /* Mobile behaviour: toggle menu */
+    @media(max-width:640px){
+      header{padding:10px 12px}
+      header h1{font-size:16px}
+      .btn{padding:8px 10px;font-size:14px}
+      .nav-toggle{display:inline-flex}
+      .nav-actions{display:none;width:100%;justify-content:flex-start}
+      header.open .nav-actions{display:flex}
+      header .badge{padding:4px 8px;font-size:12px}
+    }
+
+    .container{padding:12px}
+
+    /* Views */
+    .view{display:none}
+    .view.active{display:block}
+
+    /* Categories (unchanged) */
+    .cats{display:flex;gap:8px;margin-bottom:12px}
+    .cat{padding:8px 12px;border-radius:8px;border:1px solid #eee;cursor:pointer}
+    .cat.active{background:var(--accent);color:#fff;border-color:transparent}
+
+    /* Products grid (unchanged) */
+    .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;}
+    .card{background:#fff;border-radius:10px;padding:10px;box-shadow:0 1px 3px rgba(0,0,0,.06);display:flex;gap:20px;align-items:center}
+ .card img{width:72px;height:72px;border-radius:8px;object-fit:cover}
+    .card .meta{flex:1}
+    .card .meta h3{margin:0;font-size:16px}
+    .card .meta p{margin:6px 0 0;color:var(--muted);font-size:13px}
+    .card button{background:var(--accent);color:#fff;border:none;padding:8px 10px;border-radius:8px;cursor:pointer}
+
+    /* Order page */
+    .order-page{background:#fff;padding:12px;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+    .cart-list{margin-top:8px}
+    .cart-item{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px dashed #eee}
+    .cart-item .name{flex:1}
+    .cart-item .qty{display:flex;gap:6px;align-items:center}
+    .btn{background:var(--accent);color:#fff;border:none;padding:10px 12px;border-radius:8px;cursor:pointer}
+    .btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+    .muted{color:var(--muted);font-size:13px}
+
+    /* Admin */
+    .admin-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .panel{background:#fff;padding:10px;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+    .order-row{padding:8px;border-bottom:1px dashed #eee;display:flex;justify-content:space-between;align-items:center}
+    .order-row:last-child{border-bottom:0}
+
+    /* Responsive for grid (unchanged) */
+    
+  
+@media(min-width:700px){.grid{grid-template-columns:repeat(3,1fr)}}
+
+  
+ @media(max-width:640px){
+    .grid {
+        grid-template-columns: 1fr; /* हर product full width */
+    }
+}
+ 
+ 
+
+    /* small helper */
+    .right{margin-left:auto}
+    .center{text-align:center}
+    
+    #billBox {
+  display: none;
+  position: fixed;
+  inset: 12px;
+  background: rgba(0,0,0,.5);
+  z-index: 50;
+  padding: 20px;
+  overflow-y: auto;   /* 👈 scroll enable */
+}
+
+#billBox > div {
+  max-width: 480px;
+  margin: 40px auto;
+  background: #fff;
+  padding: 16px;
+  border-radius: 10px;
+  max-height: 90vh;   /* 👈 modal height restrict */
+  display: flex;
+  flex-direction: column;
+}
+
+#billContent {
+  flex: 1;
+  overflow-y: auto;   /* 👈 billContent scroll होईल */
+}
+
+#billBox .actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 12px;
+  position: sticky;   /* 👈 नेहमी दिसतील */
+  bottom: 0;
+  background: #fff;
+  padding-top: 8px;
+}
+
+    
+    
+    <!--  admin -->
+    /* प्रत्येक Order Row */
+.order-row{
+  background:#fff;
+  padding:10px;
+  margin:6px 0;
+  border-radius:8px;
+  box-shadow:0 1px 3px rgba(0,0,0,0.1);
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+
+/* Completed Orders साठी Date Heading */
+.date-group h4{
+  background:#f3f4f6;
+  padding:6px 10px;
+  border-radius:6px;
+  font-size:14px;
+  font-weight:600;
+  color:#333;
+  margin-top:14px;
+  margin-bottom:8px;
+}
+
+/* Panel मध्ये थोडं Gap */
+#completedOrders, #newOrders{
+  padding:8px;
+}
+
+/* बटणं */
+.date-header {
+    background:#f0f0f0;
+    padding:6px 10px;
+    margin-top:6px;
+    border-radius:6px;
+    font-weight:600;
+    font-size:14px;
+    text-align:left;
+}
+
+
+/* small helper */
+    .right{margin-left:auto}
+    .center{text-align:center}
+
+ 
+
+
+
+#billBox {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 50;
+  padding: 20px;
+  overflow: auto; /* content जास्त असेल तर scroll */
+}
+
+#billBox > div {
+  max-width: 480px;
+  margin: auto;
+  background: #fff;
+  padding: 16px;
+  border-radius: 10px;
+  height: auto;        /* content-nusar height */
+  max-height: 90vh;    /* screen पेक्षा जास्त नसेल */
+  overflow: auto;      /* content जास्त असेल तर scroll */
+}
+
+#billContent {
+  overflow: visible; /* scroll बंद */
+}
+
+
+#billBox .actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 12px;
+  position: sticky;   /* 👈 नेहमी दिसतील */
+  bottom: 0;
+  background: #fff;
+  padding-top: 8px;
+}
+
+
+
+@media print {
+  body {
+    margin: 0;
+    padding: 0;
+    font-size: 12px;   /* universal size */
+  }
+#billBox {
+    max-width: 100%;   /* printer width नुसार auto adjust */
+    width: auto;
+    overflow: visible !important;
+    height: auto !important;
+  }
+  #billBox img {
+    width: 40px;
+    height: 40px;
+  }
+  #billBox h2, #billBox h3, #billBox h4 {
+    font-size: 14px;
+    margin: 4px 0;
+  }
+  button { display: none; } /* print ला buttons दिसणार नाहीत */
+}
+
+    
+  </style>
+</head>
+<body>
+  <header id="topbar">
+    <div class="brand">
+      <h1>Food Store • Click-to-Order</h1>
+    </div>
+
+    <button class="nav-toggle" id="navToggle" aria-label="Menu">☰</button>
+
+    <nav class="nav-actions" id="navActions">
+      <button id="homeBtn" class="btn ghost">Home</button>
+      <button id="cartBtn" class="btn">Order (0)</button>
+      <button id="adminBtn" class="btn">Admin</button>
+      <div id="newBadge" class="badge" style="display:none">New</div>
+    </nav>
+  </header>
+
+  <main class="container">
+
+    <!-- HOME VIEW -->
+    <section id="homeView" class="view active">
+      <div class="cats" id="cats"></div>
+      <div id="products" class="grid"></div>
+    </section>
+
+    <!-- ORDER VIEW -->
+  <section id="orderView" class="view">
+  <div class="order-page">
+    <h2>Order Page</h2>
+    <p class="muted">Add multiple items from Home. Review here, then confirm.</p>
+
+    <!-- Name & Table -->
+    <div style="margin:10px 0; display:flex; gap:8px; flex-wrap:wrap;">
+      <input type="text" id="customerName" placeholder="Enter Customer Name" style="padding:8px; flex:1; min-width:150px;">
+      <select id="tableNo" style="padding:8px; flex:1; min-width:120px;">
+        <option value="">Select Table No.</option>
+        <option value="1">Table 1</option>
+        <option value="2">Table 2</option>
+        <option value="3">Table 3</option>
+        <option value="4">Table 4</option>
+      </select>
+    </div>
+
+    <!-- Online Delivery Available line -->
+    <p id="deliveryLine" style="color:blue; cursor:pointer; margin:5px 0;">
+      Online Delivery Available
+    </p>
+
+    <!-- Address Box (hidden by default) -->
+    <div id="addressBox" style="margin:10px 0; display:none;">
+      <textarea id="customerAddress" placeholder="Enter Delivery Address" style="padding:8px; width:100%; min-height:60px;"></textarea>
+    </div>
+
+    <!-- Cart list -->
+    <div class="cart-list" id="cartList"></div>
+
+    <!-- GST + Totals Summary (new) -->
+    <div id="summary" style="margin-top:12px; border-top:1px solid #ccc; padding-top:8px; font-size:14px;"></div>
+
+    <!-- Footer buttons -->
+    <div style="display:flex;gap:8px;align-items:center;margin-top:12px">
+      <div class="muted">Total: ₹<span id="totalAmt">0</span></div>
+      <button id="confirmOrder" class="btn right">Confirm Order</button>
+      <button id="backHome" class="btn ghost">Back</button>
+    </div>
+  </div>
+</section>
+
+
+<script>
+  // Toggle address box when line is clicked
+  document.getElementById("deliveryLine").addEventListener("click", function() {
+    const box = document.getElementById("addressBox");
+    box.style.display = (box.style.display === "none") ? "block" : "none";
+  });
+</script>
+
+
+    <!-- ADMIN VIEW -->
+    <section id="adminView" class="view">
+      <h2>Admin Panel</h2>
+      <div class="admin-grid">
+        <div class="panel">
+          <h3>New Orders</h3>
+          <div id="newOrders"></div>
+        </div>
+        <div class="panel">
+          <h3>Completed Orders</h3>
+          <div id="completedOrders"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- BILL MODAL (simple) -->
+    <div id="billBox">
+  <div>
+    <div id="billContent"></div>
+    <div class="actions">
+      <button id="printBill" class="btn">Print / Save</button>
+      <button id="closeBill" class="btn ghost">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast div (hidden by default) -->
+<div id="toast" style="
+    visibility:hidden;
+    min-width: 250px;
+    margin-left: -125px;
+    background: #333;
+    color: #fff;
+    text-align: center;
+    border-radius: 5px;
+    padding: 12px;
+    position: fixed;
+    z-index: 1;
+    left: 50%;
+    bottom: 30px;
+    font-size: 14px;
+">Bill Saved as PDF!</div>
+
+
+
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    /********** Sample product data **********/
+    const PRODUCTS = [
+  {id:'v1',cat:'Veg',name:'Paneer Butter Masala',price:150,gst:5,img:'https://picsum.photos/200?random=11'},
+  {id:'v2',cat:'Veg',name:'Veg Biryani',price:120,gst:5,img:'https://picsum.photos/200?random=12'},
+  {id:'v3',cat:'Veg',name:'Chole Bhature',price:100,gst:5,img:'https://picsum.photos/200?random=13'},
+  {id:'n1',cat:'Non-Veg',name:'Chicken Biryani',price:180,gst:12,img:'https://picsum.photos/200?random=21'},
+  {id:'n2',cat:'Non-Veg',name:'Mutton Curry',price:220,gst:12,img:'https://picsum.photos/200?random=22'},
+  {id:'n3',cat:'Non-Veg',name:'Egg Fried Rice',price:110,gst:5,img:'https://picsum.photos/200?random=23'}
+];
+
+   const csrftoken = '{{ csrf_token }}'
+
+    /* state */
+    let Cart = JSON.parse(localStorage.getItem('cart')||'[]');
+    const cats = Array.from(new Set(PRODUCTS.map(p=>p.cat)));
+
+    /* DOM refs */
+    const catsDiv = document.getElementById('cats');
+    const productsDiv = document.getElementById('products');
+    const homeView = document.getElementById('homeView');
+    const orderView = document.getElementById('orderView');
+    const adminView = document.getElementById('adminView');
+    const cartList = document.getElementById('cartList');
+    const totalAmt = document.getElementById('totalAmt');
+    const confirmOrderBtn = document.getElementById('confirmOrder');
+    const backHomeBtn = document.getElementById('backHome');
+    const adminBtn = document.getElementById('adminBtn');
+    const homeBtn = document.getElementById('homeBtn');
+    const cartBtn = document.getElementById('cartBtn');
+    const newBadge = document.getElementById('newBadge');
+
+    /* NAV toggle (added) */
+    const topbar = document.getElementById('topbar');
+    const navToggle = document.getElementById('navToggle');
+    navToggle.onclick = ()=> topbar.classList.toggle('open');
+
+    const newOrdersDiv = document.getElementById('newOrders');
+    const completedOrdersDiv = document.getElementById('completedOrders');
+
+    const billBox = document.getElementById('billBox');
+    const billContent = document.getElementById('billContent');
+    const printBill = document.getElementById('printBill');
+    const closeBill = document.getElementById('closeBill');
+
+    /* initialize categories */
+    function renderCats(){
+      catsDiv.innerHTML = '';
+      cats.forEach((c,i)=>{
+        const el = document.createElement('div');
+        el.className = 'cat' + (i===0? ' active':'');
+        el.textContent = c;
+        el.onclick = ()=>{document.querySelectorAll('.cat').forEach(x=>x.classList.remove('active'));el.classList.add('active');renderProducts(c)};
+        catsDiv.appendChild(el);
+      });
+    }
+
+    /* render products by category */
+    function renderProducts(cat){
+      productsDiv.innerHTML = '';
+      PRODUCTS.filter(p=>p.cat===cat).forEach(p=>{
+        const card = document.createElement('div');card.className='card';
+        card.innerHTML = `<img src="${p.img}" alt="${p.name}"><div class="meta"><h3>${p.name}</h3><p class="muted">₹${p.price}</p></div><div><button data-id="${p.id}">Add</button></div>`;
+        productsDiv.appendChild(card);
+        card.querySelector('button').onclick = ()=>{addToCart(p)};
+      });
+      updateCartButton();
+    }
+
+    /* add to cart (stay on home) */
+    function addToCart(prod){
+  const found = Cart.find(x=>x.id===prod.id);
+  if(found) found.qty++;
+  else Cart.push({id:prod.id,name:prod.name,price:prod.price,gst:prod.gst||0,qty:1});
+  persistCart();
+  updateCartButton();
+}
+
+    function persistCart(){
+      localStorage.setItem('cart', JSON.stringify(Cart));
+    }
+
+    function updateCartButton(){
+      const count = Cart.reduce((s,i)=>s+i.qty,0);
+      cartBtn.textContent = `Order (${count})`;
+    }
+
+    function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
+
+function renderCart(){
+  cartList.innerHTML = '';
+
+ 
+
+  // Items + GST calc (per-item, per-qty)
+  let subTotal = 0, gstTotal = 0;
+
+  Cart.forEach(item=>{
+    const lineBase = item.price * item.qty;          // price × qty
+    const lineGst  = round2(lineBase * (item.gst||0) / 100); // gst% on that line
+    subTotal += lineBase;
+    gstTotal  += lineGst;
+
+    const row = document.createElement('div');
+    row.className='cart-item';
+    row.innerHTML = `
+      <div class="name">
+        ${item.name}
+        <div class="muted">₹${item.price} x ${item.qty}</div>
+        <div class="muted">GST ${item.gst||0}% = ₹${lineGst}</div>
+      </div>
+      <div class="qty">
+        <button class="btn ghost" data-act="dec" data-id="${item.id}">-</button>
+        <div>${item.qty}</div>
+        <button class="btn ghost" data-act="inc" data-id="${item.id}">+</button>
+        <button class="btn ghost" data-act="rem" data-id="${item.id}" style="margin-left:8px">Remove</button>
+      </div>`;
+    cartList.appendChild(row);
+  });
+
+  const grandTotal = round2(subTotal + gstTotal);
+
+  // Summary block (Subtotal + GST + Total)
+  const summary = document.getElementById('summary');
+summary.innerHTML = `
+  <div style="display:flex;justify-content:space-between">
+    <div>Subtotal</div><div>₹${round2(subTotal)}</div>
+  </div>
+  <div style="display:flex;justify-content:space-between">
+    <div>GST (item-wise)</div><div>₹${round2(gstTotal)}</div>
+  </div>
+  <div style="display:flex;justify-content:space-between;font-weight:700">
+    <div>Total</div><div>₹${grandTotal}</div>
+  </div>
+`;
+
+
+  // Existing Total span (तुझ्या UI ला disturb नको म्हणून Grand Total इथेही set करतो)
+  totalAmt.textContent = grandTotal;
+
+  // attach events
+  cartList.querySelectorAll('button[data-act]').forEach(b=>{
+    b.onclick = (e)=>{
+      const id = e.currentTarget.dataset.id;
+      const act = e.currentTarget.dataset.act;
+      const idx = Cart.findIndex(x=>x.id===id);
+      if(idx===-1) return;
+      if(act==='inc') Cart[idx].qty++;
+      if(act==='dec'){ Cart[idx].qty--; if(Cart[idx].qty<=0) Cart.splice(idx,1); }
+      if(act==='rem') Cart.splice(idx,1);
+      persistCart();
+      updateCartButton();
+      renderCart();
+    }
+  });
+
+  if(Cart.length===0){
+    cartList.innerHTML = '<div class="muted center">Cart is empty. Tap products to add.</div>';
+    summary.innerHTML = '';
+  }
+}
+
+    /* confirm order -> save to localStorage */
+  // ✅ Confirm order (save + show bill)
+function confirmOrder(){
+  if(Cart.length === 0){
+    alert('Cart empty');
+    return;
+  }
+
+  const customerName = document.getElementById('customerName').value.trim();
+  const tableNo = document.getElementById('tableNo').value;
+  const address = document.getElementById('customerAddress')?.value.trim() || '';
+
+  if(!customerName || (!tableNo && !address)){
+  alert("Please enter name and either table no. or address.");
+  return;
+}
+
+  // Item-wise calc
+  let subTotal = 0, gstTotal = 0;
+  const items = Cart.map(i=>{
+    const base = i.price * i.qty;
+    const gstAmt = round2(base * (i.gst||0) / 100);
+    subTotal += base;
+    gstTotal += gstAmt;
+    return { name: i.name, price: i.price, qty: i.qty, gst: i.gst||0, gstAmt };
+  });
+  const total = round2(subTotal + gstTotal);
+
+  const orders = JSON.parse(localStorage.getItem('orders') || '[]');
+  const id = 'ORD' + Date.now();
+  const order = {
+    id,
+    name: customerName,
+    table: tableNo,
+    address: address || null,
+    items,
+    subTotal: round2(subTotal),
+    gstTotal: round2(gstTotal),
+    total,
+    status: 'new',
+    time: new Date().toISOString()
+  };
+
+  // Create new order
+fetch(' /orders/', {
+   method: 'POST',
+   headers: {'Content-Type': 'application/json',
+  'X-CSRFToken': csrftoken 
+},
+    
+    body: JSON.stringify({
+     name: customerName,
+     table: tableNo,
+     address: address || null,
+     items: items,
+     sub_total: round2(subTotal),   // ✅ Django ला हव्या त्या key
+     gst_total: round2(gstTotal),   // ✅ Django ला हव्या त्या key
+     total: total,
+     status: 'new'
+   })
+})
+.then(res => res.json())
+.then(data => {
+   console.log("Order saved:", data);
+   updateAdmin();  // refresh admin panel
+});
+
+  // ✅ फक्त Bill modal दाखवा
+  showBill(order);
+   
+
+  Cart = [];
+  persistCart();
+  updateCartButton();
+  renderCart();
+  updateAdmin();
+  showView('home');
+}
+
+
+// ✅ Print button → PDF बनव + browser मध्ये उघड
+
+
+
+    function showBill(order) {
+  billContent.innerHTML = `
+    <div id="billLayout">
+      <div style="text-align:center; margin-bottom:6px;">
+        <img src="https://img.icons8.com/color/96/000000/restaurant.png" alt="logo"/>
+        <h3>Food Store</h3>
+        <p>123 Main Street, City, India</p>
+        <p>+91 9876543210</p>
+      </div>
+      <hr>
+      <div style="text-align:center; margin:6px 0;">
+        <p><b>Order ID:</b> ${order.id}</p>
+        <p style="margin:2px 0;"><b>Name:</b> ${order.name}</p>
+        <p style="margin:2px 0;"><b>Table:</b> ${order.table}</p>
+        ${order.address ? `<p><b>Address:</b> ${order.address}</p>` : ""}
+        <p>${new Date(order.time).toLocaleString()}</p>
+      </div>
+      <hr>
+      <table style="width:100%; border-collapse:collapse;">
+        <thead>
+          <tr>
+            <th style="text-align:left;">Q</th>
+            <th style="text-align:left;">Item</th>
+            <th style="text-align:right;">Amt</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${order.items.map(it => `
+            <tr>
+              <td>${it.qty}</td>
+              <td>${it.name}</td>
+              <td style="text-align:right;">₹${(it.price * it.qty).toFixed(2)}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+      <hr>
+      <div style="text-align:right;">
+        <p>Subtotal: ₹${order.subTotal}</p>
+        <p>GST: ₹${order.gstTotal}</p>
+        <h4>Total: ₹${order.total}</h4>
+      </div>
+      <hr>
+      <div style="text-align:center; margin-top:6px;">
+        <p>THANK YOU!</p>
+        <div style="margin-top:4px; font-size:18px; letter-spacing:2px;">||||||||||||||</div>
+      </div>
+    </div>
+  `;
+
+  // dynamically adjust height according to content and screen
+  const modalDiv = billBox.querySelector('div');
+  modalDiv.style.height = 'auto';
+  if(modalDiv.offsetHeight > window.innerHeight * 0.9){
+    modalDiv.style.height = window.innerHeight * 0.9 + 'px'; // max 90% screen
+  }
+
+  billBox.style.display = "block";
+}
+
+
+document.getElementById("printBill").addEventListener("click", async () => {
+    const { jsPDF } = window.jspdf;
+    const billElement = document.getElementById("billContent");
+
+    // Show toast immediately
+    showToast("Saving Bill as PDF...");
+
+    // Open print dialog immediately (non-blocking)
+    setTimeout(() => {
+        window.print();
+    }, 1);
+
+    // PDF generation in background
+    setTimeout(async () => {
+        const canvas = await html2canvas(billElement, { scale: 2 });
+        const imgData = canvas.toDataURL("image/png");
+
+        const pdf = new jsPDF("p", "mm", "a4");
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+
+        const imgWidth = pageWidth - 20;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+        let heightLeft = imgHeight;
+        let position = 10;
+
+        // First page
+        pdf.addImage(imgData, "PNG", 10, position, imgWidth, imgHeight);
+        heightLeft -= (pageHeight - 20);
+
+        // Remaining pages
+        while (heightLeft > 0) {
+            pdf.addPage();
+            position = heightLeft - imgHeight + 10;
+            pdf.addImage(imgData, "PNG", 10, position, imgWidth, imgHeight);
+            heightLeft -= (pageHeight - 20);
+        }
+
+        // Save file with date
+        const today = new Date();
+        const dateStr = today.toISOString().split("T")[0];
+        pdf.save(`Sanad_Restaurant_Bill_${dateStr}.pdf`);
+
+        // Update toast
+        showToast("Bill Saved as PDF!");
+    }, 500); // delay so toast render first
+    
+    closeBill.onclick = () => {
+    billBox.style.display = 'none';
+};
+
+});
+
+
+// Toast function
+function showToast(msg) {
+    const toast = document.getElementById("toast");
+    toast.textContent = msg;
+    toast.style.visibility = "visible";
+    setTimeout(() => {
+        toast.style.visibility = "hidden";
+    }, 2500);
+}
+
+    
+   
+
+
+function markComplete(id){
+  console.log("Marking complete:", id); // debug
+
+    
+   fetch(` /orders/${id}/complete/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': csrftoken    // ✅ Add this line
+    },
+  })
+    .then(res => {
+      console.log("Complete status:", res.status);
+      return res.json();
+    })
+    .then(data => {
+      console.log("Complete response:", data);
+      updateAdmin();
+    })
+    .catch(err => console.error('Error completing:', err));
+}
+
+
+<!--     update admin function  -->
+function updateAdmin() {
+  fetch(' /orders/')
+    .then(res => res.json())
+    .then(orders => {
+      const newOrdersDiv = document.getElementById('newOrders');
+      const completedOrdersDiv = document.getElementById('completedOrders');
+
+      newOrdersDiv.innerHTML = '';
+      completedOrdersDiv.innerHTML = '';
+
+      // 1️⃣ New Orders
+      orders.filter(o => o.status === 'new').forEach(o => {
+        const row = document.createElement('div');
+        row.className = 'order-row';
+        row.innerHTML = `
+          <div>
+            <b>${o.id}</b> - ${o.name} (Table ${o.table})
+            <br><small>${new Date(o.time).toLocaleTimeString()}</small>
+          </div>
+          <div>
+            <button class="btn ghost" onclick="markComplete('${o.id}')">Complete</button>
+            <button class="btn" onclick="viewOrderAdmin('${o.id}')">View</button>
+          </div>
+        `;
+        newOrdersDiv.appendChild(row);
+      });
+
+      // 2️⃣ Completed Orders grouped by date
+      const completedOrders = orders.filter(o => o.status === 'completed');
+
+      const grouped = {};
+      completedOrders.forEach(o => {
+        const dateStr = new Date(o.time).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+        if (!grouped[dateStr]) grouped[dateStr] = [];
+        grouped[dateStr].push(o);
+      });
+
+      const sortedDates = Object.keys(grouped).sort((a, b) => new Date(b) - new Date(a));
+
+      sortedDates.forEach(dateStr => {
+        const ordersForDate = grouped[dateStr];
+
+        ordersForDate.sort((a, b) => new Date(b.time) - new Date(a.time));
+
+        ordersForDate.forEach(o => {
+          const row = document.createElement('div');
+          row.className = 'order-row';
+          row.innerHTML = `
+            <div>
+              <b>${o.id}</b> - ${o.name} (Table ${o.table})
+              <br><small>${new Date(o.time).toLocaleTimeString()}</small>
+            </div>
+            <div>
+              <button class="btn" onclick="viewOrderAdmin(${o.id})">View</button>
+            </div>
+          `;
+          completedOrdersDiv.appendChild(row);
+        });
+
+        // Add summary row with total orders and total amount for the date
+        const totalAmount = ordersForDate.reduce((sum, o) => sum + (o.total || 0), 0);
+        const orderCount = ordersForDate.length;
+
+        const summaryRow = document.createElement('div');
+        summaryRow.className = 'order-row';
+        summaryRow.style.textAlign = 'center';
+        summaryRow.style.fontWeight = 'bold';
+        summaryRow.style.background = '#f0f0f0';
+        summaryRow.style.marginTop = '4px';
+        summaryRow.textContent = `---- ${new Date(dateStr).toLocaleDateString()} | Orders: ${orderCount} | Total: ₹${totalAmount.toFixed(2)} ----`;
+        completedOrdersDiv.appendChild(summaryRow);
+      });
+
+      // 🔴 New order badge
+      const newBadge = document.getElementById('newBadge');
+      const hasNew = orders.some(o => o.status === 'new');
+      newBadge.style.display = hasNew ? 'inline-block' : 'none';
+    });
+}
+
+
+async function viewOrderAdmin(id){
+  try {
+    const res = await fetch(` /orders/${id}/`);
+    if (!res.ok) throw new Error("Order not found");
+    const order = await res.json();
+    order.subTotal = order.sub_total;
+    order.gstTotal = order.gst_total;
+
+    showBill(order);
+  } catch (err) {
+    console.error("Failed to load order:", err);
+    alert("Could not load order: " + err.message);
+  }
+}
+
+    /* view switcher */
+    function showView(v){
+      homeView.classList.remove('active'); orderView.classList.remove('active'); adminView.classList.remove('active');
+      if(v==='home') homeView.classList.add('active');
+      if(v==='order') orderView.classList.add('active');
+      if(v==='admin') adminView.classList.add('active');
+    }
+
+    /* nav events */
+    confirmOrderBtn.onclick = confirmOrder;
+    backHomeBtn.onclick = ()=>showView('home');
+    adminBtn.onclick = ()=>{showView('admin'); updateAdmin();};
+    homeBtn.onclick = ()=>showView('home');
+    cartBtn.onclick = ()=>{showView('order'); renderCart();};
+
+    // initial render
+    renderCats(); renderProducts(cats[0]); renderCart(); updateAdmin(); updateCartButton();
+
+    // expose a simple global (for debugging when opened locally)
+    window.__FOOD_APP = {PRODUCTS,Cart};
+    
+    
+     // initial render
+    renderCats();
+    renderProducts(cats[0]); 
+    renderCart(); 
+    updateAdmin(); 
+    updateCartButton();
+
+    // expose a simple global (for debugging when opened locally)
+    window.__FOOD_APP = {PRODUCTS,Cart};
+
+
+</script>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  
+</body>
+</html>

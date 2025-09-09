@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin Panel - Food Store</title>
+<style>
+:root{--accent:#ff6b35;--muted:#666}
+*{box-sizing:border-box}
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial;margin:0;color:#222;background:#f9f9f9;padding:12px}
+header{position:sticky;top:0;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.06);padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+header h1{font-size:18px;margin:0;line-height:1.2}
+.btn{background:var(--accent);color:#fff;border:none;padding:8px 10px;border-radius:8px;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+.admin-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+.panel{background:#fff;padding:10px;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+.order-row{background:#fff;padding:10px;margin:6px 0;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);display:flex;justify-content:space-between;align-items:center}
+#billBox{display:none;position:fixed;inset:12px;background:rgba(0,0,0,.5);z-index:50;padding:20px;overflow-y:auto}
+#billBox>div{max-width:480px;margin:40px auto;background:#fff;padding:16px;border-radius:10px;display:flex;flex-direction:column;max-height:90vh}
+#billContent{flex:1;overflow-y:auto}
+#billBox .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;position:sticky;bottom:0;background:#fff;padding-top:8px}
+</style>
+</head>
+<body>
+<header><h1>Food Store • Admin Panel</h1></header>
+<div class="admin-grid">
+  <div class="panel">
+    <h3>New Orders</h3>
+    <div id="newOrders"></div>
+  </div>
+  <div class="panel">
+    <h3>Completed Orders</h3>
+    <div id="completedOrders"></div>
+  </div>
+</div>
+
+<!-- BILL MODAL -->
+<div id="billBox">
+  <div>
+    <div id="billContent"></div>
+    <div class="actions">
+      <button id="printBill" class="btn">Print / Save</button>
+      <button id="closeBill" class="btn ghost">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<script>
+/* Sample orders (for demo, replace with localStorage data if available) */
+if(!localStorage.getItem('orders')){
+localStorage.setItem('orders',JSON.stringify([
+  {id:'ORD1',name:'John',table:'1',address:null,items:[{name:'Paneer',price:150,qty:1,gst:5,gstAmt:7.5}],subTotal:150,gstTotal:7.5,total:157.5,status:'new',time:new Date().toISOString()},
+  {id:'ORD2',name:'Alice',table:'2',address:null,items:[{name:'Chicken',price:180,qty:2,gst:12,gstAmt:43.2}],subTotal:360,gstTotal:43.2,total:403.2,status:'completed',time:new Date().toISOString()}
+]))}
+
+/* MARK COMPLETE */
+
+
+function markComplete(id){
+  console.log("Marking complete:", id); // debug
+
+    
+   fetch(`/orders/${id}/complete/`, {
+    method: 'POST',
+    headers: {
+  'Content-Type': 'application/json',
+  'X-CSRFToken': csrftoken,
+        }
+
+  })
+    .then(res => {
+      console.log("Complete status:", res.status);
+      return res.json();
+    })
+    .then(data => {
+      console.log("Complete response:", data);
+      updateAdmin();
+    })
+    .catch(err => console.error('Error completing:', err));
+}
+
+
+/* VIEW BILL */
+
+async function viewOrderAdmin(id){
+  try {
+    const res = await fetch(` /orders/${id}/`);
+    if (!res.ok) throw new Error("Order not found");
+    const order = await res.json();
+    order.subTotal = order.sub_total;
+    order.gstTotal = order.gst_total;
+
+    showBill(order);
+  } catch (err) {
+    console.error("Failed to load order:", err);
+    alert("Could not load order: " + err.message);
+  }
+}
+
+
+/* SHOW BILL */
+ function showBill(order) {
+  const billContent = document.getElementById("billContent");
+  billContent.innerHTML = `
+    <div id="billLayout">
+      <div style="text-align:center; margin-bottom:6px;">
+        <img src="https://img.icons8.com/color/96/000000/restaurant.png" alt="logo"/>
+        <h3>Food Store</h3>
+        <p>123 Main Street, City, India</p>
+        <p>+91 9876543210</p>
+      </div>
+      <hr>
+      <div style="text-align:center; margin:6px 0;">
+        <p><b>Order ID:</b> ${order.id}</p>
+        <p style="margin:2px 0;"><b>Name:</b> ${order.name}</p>
+        <p style="margin:2px 0;"><b>Table:</b> ${order.table}</p>
+        ${order.address ? `<p><b>Address:</b> ${order.address}</p>` : ""}
+        <p>${new Date(order.time).toLocaleString()}</p>
+      </div>
+      <hr>
+      <table style="width:100%; border-collapse:collapse;">
+        <thead>
+          <tr>
+            <th style="text-align:left;">Q</th>
+            <th style="text-align:left;">Item</th>
+            <th style="text-align:right;">Amt</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${order.items.map(it => `
+            <tr>
+              <td>${it.qty}</td>
+              <td>${it.name}</td>
+              <td style="text-align:right;">₹${(it.price * it.qty).toFixed(2)}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+      <hr>
+      <div style="text-align:right;">
+        <p>Subtotal: ₹${order.subTotal}</p>
+        <p>GST: ₹${order.gstTotal}</p>
+        <h4>Total: ₹${order.total}</h4>
+      </div>
+      <hr>
+      <div style="text-align:center; margin-top:6px;">
+        <p>THANK YOU!</p>
+        <div style="margin-top:4px; font-size:18px; letter-spacing:2px;">||||||||||||||</div>
+      </div>
+    </div>
+  `;
+
+  // dynamically adjust height according to content and screen
+  const modalDiv = billBox.querySelector('div');
+  modalDiv.style.height = 'auto';
+  if(modalDiv.offsetHeight > window.innerHeight * 0.9){
+    modalDiv.style.height = window.innerHeight * 0.9 + 'px'; // max 90% screen
+  }
+
+  billBox.style.display = "block";
+
+}
+
+/* PRINT BILL */
+document.getElementById("printBill").addEventListener("click", async () => {
+    const { jsPDF } = window.jspdf;
+    const billElement = document.getElementById("billContent");
+
+    // Show toast immediately
+    showToast("Saving Bill as PDF...");
+
+    // Open print dialog immediately (non-blocking)
+    setTimeout(() => {
+        window.print();
+    }, 1);
+
+    // PDF generation in background
+    setTimeout(async () => {
+        const canvas = await html2canvas(billElement, { scale: 2 });
+        const imgData = canvas.toDataURL("image/png");
+
+        const pdf = new jsPDF("p", "mm", "a4");
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+
+        const imgWidth = pageWidth - 20;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+        let heightLeft = imgHeight;
+        let position = 10;
+
+        // First page
+        pdf.addImage(imgData, "PNG", 10, position, imgWidth, imgHeight);
+        heightLeft -= (pageHeight - 20);
+
+        // Remaining pages
+        while (heightLeft > 0) {
+            pdf.addPage();
+            position = heightLeft - imgHeight + 10;
+            pdf.addImage(imgData, "PNG", 10, position, imgWidth, imgHeight);
+            heightLeft -= (pageHeight - 20);
+        }
+
+        // Save file with date
+        const today = new Date();
+        const dateStr = today.toISOString().split("T")[0];
+        pdf.save(`Sanad_Restaurant_Bill_${dateStr}.pdf`);
+
+        // Update toast
+        showToast("Bill Saved as PDF!");
+    }, 500); // delay so toast render first
+    
+    closeBill.onclick = () => {
+    billBox.style.display = 'none';
+};
+
+});
+
+
+/* CLOSE BILL */
+document.getElementById('closeBill').onclick=()=>{document.getElementById('billBox').style.display='none';}
+
+async function getOrdersFromAPI() {
+  try {
+    const res = await fetch('/orders');
+    const data = await res.json();
+    return data;
+  } catch (err) {
+    console.error('Failed to fetch orders:', err);
+    return [];
+  }
+}
+
+
+/* UPDATE ADMIN PANEL */
+async function updateAdmin(){
+  const orders = await getOrdersFromAPI();
+
+  const newOrdersDiv=document.getElementById('newOrders');
+  const completedOrdersDiv=document.getElementById('completedOrders');
+  newOrdersDiv.innerHTML=''; completedOrdersDiv.innerHTML='';
+
+  // बाकी कोड जसाच आहे (new/completed ऑर्डर दर्शवण्यासाठी)
+
+
+  // NEW ORDERS
+    orders.filter(o=>o.status==='new').forEach(o=>{
+    const row=document.createElement('div');
+    row.className='order-row';
+    row.innerHTML=`<div><b>${o.id}</b> - ${o.name} (Table ${o.table||'-'})<br><small>${new Date(o.time).toLocaleString()}</small></div>
+    <div><button class="btn ghost" onclick="markComplete('${o.id}')">Complete</button>
+    <button class="btn" onclick="viewOrderAdmin('${o.id}')">View</button></div>`;
+    newOrdersDiv.appendChild(row);
+  });
+
+  // COMPLETED ORDERS grouped by date
+  const completed=orders.filter(o=>o.status==='completed');
+  const grouped={};
+  completed.forEach(o=>{const dateStr = new Date(o.time).toLocaleDateString('en-CA');if(!grouped[dateStr])grouped[dateStr]=[];grouped[dateStr].push(o)});
+  const sortedDates=Object.keys(grouped).sort((a,b)=>new Date(b)-new Date(a));
+
+  sortedDates.forEach(dateStr=>{
+    const arr=grouped[dateStr];
+    arr.sort((a,b)=>new Date(b.time)-new Date(a.time));
+    arr.forEach(o=>{
+      const row=document.createElement('div');
+      row.className='order-row';
+      
+      row.innerHTML=`<div><b>${o.id}</b> - ${o.name} (Table ${o.table||'-'})<br><small>${new Date(o.time).toLocaleTimeString()}</small></div>
+      <div><button class="btn" onclick="viewOrderAdmin('${o.id}')">View</button></div>`;
+      completedOrdersDiv.appendChild(row);
+    });
+    const totalAmt=arr.reduce((s,o)=>s+o.total,0);
+    const orderCount=arr.length;
+    const summary=document.createElement('div');
+    summary.className='order-row';
+    summary.style.textAlign='center';summary.style.fontWeight='600';summary.style.background='#f0f0f0';summary.style.marginTop='4px';
+    summary.textContent=`---- ${new Date(dateStr).toLocaleDateString()} | Orders: ${orderCount} | Total: ₹${totalAmt.toFixed(2)} ----`;
+    completedOrdersDiv.appendChild(summary);
+  });
+}
+
+function getCookie(name) {
+      let cookieValue = null;
+      if (document.cookie && document.cookie !== '') {
+          const cookies = document.cookie.split(';');
+          for (let i = 0; i < cookies.length; i++) {
+              const cookie = cookies[i].trim();
+              if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                  cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                  break;
+              }
+          }
+      }
+      return cookieValue;
+  }
+  const csrftoken = getCookie('csrftoken');
+updateAdmin();
+</script>
+</body>
+</html>
